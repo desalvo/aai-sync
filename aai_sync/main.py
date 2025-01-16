@@ -34,6 +34,7 @@ def sync():
     parser.add_argument('-g', '--group', nargs=1, default=['atlas'], help='Group of users')
     parser.add_argument('--atlas', help='ATLAS users')
     parser.add_argument('--bindpw', nargs=1, default=[default_bindpw], type=ascii, help='LDAP bindpw')
+    parser.add_argument('-d', '--debug', action='store_true', help='Debug output')
     parser.add_argument('-v', '--verbose', action='store_true', help='Verbose output')
     args = parser.parse_args()
 
@@ -65,7 +66,7 @@ def sync():
 
     result_sets = []
     for baseSearch in baseSearches:
-        if (args.verbose):
+        if (args.debug):
             print ("\n-----> %s <------\n>>>>>> %s\n" % (baseSearch,searchFilter))
             print ("\n-----> %s <------\n" % baseSearch)
         try:
@@ -78,7 +79,7 @@ def sync():
                 else:
                     if result_type == ldap.RES_SEARCH_ENTRY:
                         result_set.append(result_data)
-            if (args.verbose):
+            if (args.debug):
                 for res in result_set:
                     for entry in res:
                         print (f"{entry[0]}")
