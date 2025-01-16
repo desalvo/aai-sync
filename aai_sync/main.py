@@ -4,15 +4,18 @@ import ldap
 import os
 import sys
 
+
 def sync():
     config = configparser.ConfigParser()
     config.read('%s/.aai-sync.conf' % os.environ['HOME'])
     default_binddn = config['secrets']['BINDDN']
     default_bindpw = config['secrets']['BINDPW']
 
+    site_branch = 'roma1'
+    local_branch = 't2rm1'
     default_search_base = 'ou=People,dc=infn,dc=it'
-    default_site_search_base = 'ou=People,dc=roma1,dc=infn,dc=it'
-    default_local_search_base = 'ou=People,dc=t2rm1,dc=infn,dc=it'
+    default_site_search_base = f'ou=People,dc={site_branch},dc=infn,dc=it'
+    default_local_search_base = f'ou=People,dc={local_branch},dc=infn,dc=it'
     default_filter = "atlas"
     filters = {
                 'atlas' : '(isMemberOf=s:csn1:atlas::*)',
@@ -29,10 +32,9 @@ def sync():
     parser.add_argument('-l', '--local-base-search', nargs=1, default=[default_local_search_base], help='LDAP base search (default "%s")' % default_local_search_base)
     parser.add_argument('-f', '--filter', nargs=1, help='LDAP search filter (default "%s")' % filters[default_filter])
     parser.add_argument('-a', '--attribute', action='append', help='LDAP search attribute')
-    parser.add_argument('-H', '--host', nargs=1, default=['ds.infn.it'], help='LDAP host')
+    parser.add_argument('-H', '--host', nargs=1, default=['ds.roma1.infn.it'], help='LDAP host')
     parser.add_argument('--binddn', nargs=1, default=[default_binddn], help='LDAP binddn')
     parser.add_argument('-g', '--group', nargs=1, default=['atlas'], help='Group of users')
-    parser.add_argument('--atlas', help='ATLAS users')
     parser.add_argument('--bindpw', nargs=1, default=[default_bindpw], type=ascii, help='LDAP bindpw')
     parser.add_argument('-d', '--debug', action='store_true', help='Debug output')
     parser.add_argument('-v', '--verbose', action='store_true', help='Verbose output')
@@ -67,8 +69,9 @@ def sync():
     result_sets = []
     for baseSearch in baseSearches:
         if (args.debug):
-            print ("\n-----> %s <------\n>>>>>> %s\n" % (baseSearch,searchFilter))
             print ("\n-----> %s <------\n" % baseSearch)
+            print ("\n-----> %s <------\n" % searchFilter)
+            print ("\n-----> %s <------\n" % searchAttributes)
         try:
             ldap_results = ds.search(baseSearch, searchScope, searchFilter, searchAttributes)
             result_set = []
@@ -78,9 +81,14 @@ def sync():
                     break
                 else:
                     if result_type == ldap.RES_SEARCH_ENTRY:
-                        result_set.append(result_data)
+                        if ('uid' in result_data[0][1].keys()):
+                            result_set.append(result_data)
+                        else:
+                            print (f"No uid in record {result_data[0][1].keys()}")
+                            sys.exit(10)
             if (args.debug):
                 for res in result_set:
+                    print (f">>> {res}")
                     for entry in res:
                         print (f"{entry[0]}")
                         for attr in entry[1].keys():
@@ -115,3 +123,18 @@ def sync():
     if (args.verbose):
         print (f"Total users: {user_count[0]}")
         print (f"New users: {user_count[1]}")
+    for user in add_user:
+        uid = user[1]['uid'][0].decode('utf-8')
+        infnlinkeduuid = user[1]['infnlinkeduuid'][0].decode('utf-8')
+        givenName = user[1]['givenName'][0].decode('utf-8')
+        sn = user[1]['sn'][0].decode('utf-8')
+        if ('infnKerberosPrincipal' in user[1].keys()):
+            infnKerberosPrincipal = user[1]['infnKerberosPrincipal'][0].decode('utf-8')
+        else:
+            infnKerberosPrincipal = ""
+        mail = user[1]['mail'][0].decode('utf-8')
+        if ('mailalternateaddress' in user[1].keys()):
+            mailalternateaddress = user[1]['mailalternateaddress'][0].decode('utf-8')
+        else:
+            mailalternateaddress = ""
+        print (f"ssh -p 57847 extuserserv@protoserv.infn.it ADD \"{local_branch}:{uid}:{infnlinkeduuid}:{givenName}:{sn}:{infnKerberosPrincipal}:{mail}:{mailalternateaddress}\"")
